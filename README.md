@@ -12,3 +12,33 @@ Data Ramp-compliant project on the subject of the classification of epilepsy sei
 | LERMITE         | Titouan    | titouan.lermite@polytechnique.edu        |
 | LOISON          | Xavier     | xavier.loison@polytechnique.edu          |
 | NOIR            | Mathys     | mathys.noir@polytechnique.edu            |
+
+# Getting started
+
+## Installation
+
+If you are using pip you can install the requirements with:
+```bash
+pip install -r requirements.txt
+```
+
+If you are using conda you can install the requirements with:
+```bash
+conda env create -f environment.yml
+```
+
+## Challenge
+
+Get started with the challenge by reading the [starting kit](starting_kit.ipynb)
+
+## Usage / Test submission
+
+```bash
+ramp-test --submission my_submission
+```
+
+You can also get more information about the command line interface with:
+
+```bash
+ramp-test --help
+```
