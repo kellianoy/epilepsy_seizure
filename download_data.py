@@ -134,9 +134,12 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
     patient_file = "chb0" + \
         str(number_of_patient) if number_of_patient < 10 else "chb" + \
         str(number_of_patient)
-    np.save(dir_where_to_save + patient_file +
-            "_y.npy", np.float16(x_master))
-    np.save(dir_where_to_save + patient_file + "_y.npy", y_master)
+    if not os.path.exists(dir_where_to_save + patient_file):
+        os.makedirs(dir_where_to_save + patient_file)
+    np.save(dir_where_to_save + patient_file + "/" + patient_file +
+            "_X.npy", np.float16(x_master))
+    np.save(dir_where_to_save + patient_file + "/" +
+            patient_file + "_y.npy", np.float16(y_master))
 
 
 def download_dataset(folder):
