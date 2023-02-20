@@ -198,7 +198,7 @@ def download_dataset(folder, remove=False):
                     preprocess_to_numpy(records_summary,
                                         seizure_summary,
                                         folder,
-                                        patients[patient],
+                                        patients[previous_patient],
                                         'dataset/',
                                         1)
                     if remove:
