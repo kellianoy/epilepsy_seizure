@@ -31,7 +31,6 @@ def data_to_fft(data):
     fft_tensor = np.float16(np.log10(np.abs(fft_tensor) + 1e-6))
     indices = np.where(fft_tensor <= 0)
     fft_tensor[indices] = 0
-
     return fft_tensor
 
 
@@ -92,7 +91,61 @@ def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient
     return np.array(x), np.array(y)
 
 
-def preprocess_to_numpy(records_path, seizure_summary_path, database_path, number_of_patient, dir_where_to_save,
+def remove_hours(X, y):
+    """ Remove 4 hours before and after an epilepsy seizure
+    Parameters
+    ----------
+    X: numpy array
+        Array of the data
+    y: numpy array
+        Array of the labels
+
+    Returns
+    ----------
+    X_interictal: numpy array
+        Array of the data with 4 hours before and after an epilepsy seizure removed
+    y_interictal: numpy array
+        Array of the labels with 4 hours before and after an epilepsy seizure removed
+    """
+    acc = 0
+    y[:, 1] = y[:, 1]/1000
+    y_new = np.zeros(y.shape[0])
+    for i in range(y.shape[0]-1):
+        y_new[i] = acc + y[i, 1]
+        if y[i+1, 1] == 0.0:
+            # print(i,y[i-1,1])
+            acc += y[i, 1]
+    y_new[-1] = acc + y[-1, 1]
+    y_interictal = np.ones(y_new.shape)
+    memoire_interictal = 0
+    flag_effet_de_bord = 0
+    for i in range(len(y[:, 1])-1):
+        if y[i, 0] == 1 and y[i+1, 0] == 0:
+            memoire_interictal = i
+            flag_effet_de_bord = 1
+        if (y_new[i] < y_new[memoire_interictal]+4*3600 or y[i, 0] == 1) and flag_effet_de_bord:
+            y_interictal[i] = 0
+    memoire_interictal = -1
+    flag_effet_de_bord = 0
+    for i in range(len(y[:, 1])-1, 0, -1):
+        if y[i, 0] == 1 and y[i-1, 0] == 0:
+            memoire_interictal = i
+            flag_effet_de_bord = 1
+        if (y_new[i] > y_new[memoire_interictal]-4*3600 or y[i, 0] == 1) and flag_effet_de_bord:
+            y_interictal[i] = 0
+    x_to_save = []
+    y_to_save = []
+    for i in range(y.shape[0]):
+        if y[i, 0] == 1:
+            x_to_save.append(X[i])
+            y_to_save.append(1)
+        elif y_interictal[i] == 1:
+            x_to_save.append(X[i])
+            y_to_save.append(0)
+    return np.array(x_to_save), np.array(y_to_save)
+
+
+def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patient_id, output_folder,
                         time_length):
     """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
     Parameters
@@ -103,9 +156,9 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
         Name of the file containing the list of the filename of the data
     database_path: str
         Path to the folder containing the data
-    number_of_patient: int
+    patient_id: int
         Number of the patient
-    dir_where_to_save: str
+    output_folder: str
         Path to the folder where to save the data
     time_length: float
         Length of the time window in seconds
@@ -126,7 +179,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
 
     flag = False
     for filename in csv_reader_list_filename:
-        if int(filename[0][3] + filename[0][4]) == number_of_patient:
+        if int(filename[0][3] + filename[0][4]) == patient_id:
             bounds = []
             if filename[0][6:] in liste_bounds[0]:
                 indices = [i for i, x in enumerate(
@@ -135,7 +188,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
                     bounds.append([liste_bounds[1][indice],
                                    liste_bounds[2][indice]])
             x, y = edf_to_array(database_path +
-                                filename[0], bounds, time_length, number_of_patient)
+                                filename[0], bounds, time_length, patient_id)
             if not flag:
                 x_master = np.copy(x)
                 y_master = np.copy(y)
@@ -143,14 +196,31 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
             else:
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
+    X, y = remove_hours(x_master, y_master)
+    save_numpy(X, y, patient_id, output_folder)
 
-    patient_file = f"chb0{number_of_patient}" if number_of_patient < 10 else f"chb{number_of_patient}"
-    if not os.path.exists(dir_where_to_save + patient_file):
-        os.makedirs(dir_where_to_save + patient_file)
-    np.save(dir_where_to_save + patient_file + "/" + patient_file +
-            "_X.npy", np.float16(x_master))
-    np.save(dir_where_to_save + patient_file + "/" +
-            patient_file + "_y.npy", np.float16(y_master))
+
+def save_numpy(X, y, patient_id, save_folder):
+    """ Save the data in numpy format
+    Parameters
+    ----------
+    X: np.array
+        Data
+    y: np.array
+        Labels
+    patient_id: int
+        Number of the patient
+    save_folder: str
+        Path to the folder where to save the data
+    """
+
+    patient_file = f"chb0{patient_id}" if patient_id < 10 else f"chb{patient_id}"
+    if not os.path.exists(save_folder + patient_file):
+        os.makedirs(save_folder + patient_file)
+    np.save(save_folder + patient_file + "/" + patient_file +
+            "_X.npy", np.float16(X))
+    np.save(save_folder + patient_file + "/" +
+            patient_file + "_y.npy", np.float16(y))
 
 
 def download_dataset(eeg_database_folder, remove=False, force_process=False, force_download=False):
@@ -179,9 +249,9 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         os.makedirs(eeg_database_folder)
     if not os.path.exists(dataset_folder):
         os.makedirs(dataset_folder)
+    # download the records and seizure summary files
     if not os.path.exists(records_summary):
         urllib.request.urlretrieve(website + "RECORDS", records_summary)
-    # download the seizure summary file
     if not os.path.exists(seizure_summary):
         urllib.request.urlretrieve(summary, seizure_summary)
     # For each patient we are interested in, download the records
