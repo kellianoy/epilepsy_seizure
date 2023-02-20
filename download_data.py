@@ -150,13 +150,15 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
             patient_file + "_y.npy", np.float16(y_master))
 
 
-def download_dataset(folder):
+def download_dataset(folder, remove=False):
     """ Download the dataset from the website, limiting the number of records
     (some records are not working)
     Parameters
     ----------
     folder : str
         folder where to save the dataset
+    remove : bool
+        if True, remove the folder before downloading the dataset to save space
     """
     # file where to save the records file (header)
     seizure_summary = folder + "seizure_summary.csv"
@@ -203,12 +205,14 @@ def download_dataset(folder):
                                         int(previous_patient[-1]),
                                         'dataset/',
                                         1)
-                    # Remove the previous patient folder to save space
-                    print("Removing " + previous_patient + "...")
-                    shutil.rmtree(folder+previous_patient)
+                    if remove:
+                        # Remove the previous patient folder to save space
+                        print("Removing " + previous_patient + "...")
+                        shutil.rmtree(folder+previous_patient)
                 previous_patient = patient
-    print("Removing " + folder + "...")
-    shutil.rmtree(folder)
+    if remove:
+        print("Removing " + folder + "...")
+        shutil.rmtree(folder)
 
 
 if __name__ == "__main__":
