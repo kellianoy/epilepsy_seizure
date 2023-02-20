@@ -175,11 +175,11 @@ def download_dataset(folder, remove=False):
     if not os.path.exists(seizure_summary):
         urllib.request.urlretrieve(summary, seizure_summary)
     # For each patient we are interested in, download the records
-    list_patient = []
+    patients = {}
     for i in [2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]:
         # Retrieve summary of seizures
         current_patient = f"chb0{i}" if i < 10 else f"chb{i}"
-        list_patient.append(current_patient)
+        patients[current_patient] = i
         # Create the folder for the patient
         if not os.path.exists(folder+current_patient):
             os.makedirs(folder+current_patient)
@@ -188,7 +188,8 @@ def download_dataset(folder, remove=False):
     previous_patient = None
     with open(records_summary) as f:
         for record in f:
-            if record[:5] in list_patient:
+            # patients is a dictionary of patients we are interested in
+            if record[:5] in patients.keys():
                 patient = record[:5]
                 # Preprocess the data and save it in numpy format
                 if patient != previous_patient and previous_patient is not None:
@@ -197,7 +198,7 @@ def download_dataset(folder, remove=False):
                     preprocess_to_numpy(records_summary,
                                         seizure_summary,
                                         folder,
-                                        int(previous_patient[-1]),
+                                        patients[patient],
                                         'dataset/',
                                         1)
                     if remove:
