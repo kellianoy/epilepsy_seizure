@@ -150,7 +150,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
             patient_file + "_y.npy", np.float16(y_master))
 
 
-def download_dataset(folder, remove=False):
+def download_dataset(folder, remove=False, force_process=False, force_download=False):
     """ Download the dataset from the website, limiting the number of records
     (some records are not working)
     Parameters
@@ -159,10 +159,15 @@ def download_dataset(folder, remove=False):
         folder where to save the dataset
     remove : bool
         if True, remove the folder before downloading the dataset to save space
+    force_process : bool
+        if True, force the processing of the dataset
+    force_download : bool
+        if True, force the download of the dataset
     """
     # file where to save the records file (header)
     seizure_summary = folder + "seizure_summary.csv"
     records_summary = folder + "RECORDS"
+    dataset = 'dataset/'
     # website where to download the dataset
     website = "https://archive.physionet.org/pn6/chbmit/"
     summary = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
@@ -194,19 +199,20 @@ def download_dataset(folder, remove=False):
                 # Preprocess the data and save it in numpy format
                 if patient != previous_patient and previous_patient is not None:
                     # Preprocess the previous patient
-                    print("Preprocessing " + previous_patient + "...")
-                    preprocess_to_numpy(records_summary,
-                                        seizure_summary,
-                                        folder,
-                                        patients[previous_patient],
-                                        'dataset/',
-                                        1)
-                    if remove:
-                        # Remove the previous patient folder to save space
-                        print("Removing " + previous_patient + "...")
-                        shutil.rmtree(folder+previous_patient)
+                    if not os.path.exists(dataset + previous_patient) or force_process:
+                        print("Preprocessing " + previous_patient + "...")
+                        preprocess_to_numpy(records_summary,
+                                            seizure_summary,
+                                            folder,
+                                            patients[previous_patient],
+                                            dataset,
+                                            1)
+                        if remove:
+                            # Remove the previous patient folder to save space
+                            print("Removing " + previous_patient + "...")
+                            shutil.rmtree(folder+previous_patient)
                 # Download the record if it does not exist
-                if not os.path.exists(folder+record.strip()):
+                if not os.path.exists(folder+record.strip()) or force_download:
                     print("Downloading "+record.strip() + "...")
                     urllib.request.urlretrieve(
                         website+record.strip(), folder+record.strip())
