@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 
 chb-mit-scalp-eeg-database-1.0.0/
+dataset/
