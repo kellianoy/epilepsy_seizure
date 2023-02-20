@@ -18,7 +18,7 @@ def data_to_fft(data):
 
         Parameters
         ----------
-        data :  array of data from CHB-MIT dataset
+        data:  array of data from CHB-MIT dataset
 
         Returns
         ----------
@@ -37,13 +37,13 @@ def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient
     """ Convert an edf file to a numpy array
     Parameters
     ----------
-    filename_in : str
+    filename_in: str
         Name of the file to convert
-    seizures_time_code : list
+    seizures_time_code: list
         List of the time of the seizures
-    time_length : float
+    time_length: float
         Length of the time window in seconds
-    number_of_patient : int
+    number_of_patient: int
 
     Returns
     ----------
@@ -94,17 +94,17 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
     """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
     Parameters
     ----------
-    records_path : str
+    records_path: str
         Path to the file containing the `RECORDS` file
-    seizure_summary_path : str
+    seizure_summary_path: str
         Name of the file containing the list of the filename of the data
-    database_path : str
+    database_path: str
         Path to the folder containing the data
-    number_of_patient : int
+    number_of_patient: int
         Number of the patient
-    dir_where_to_save : str
+    dir_where_to_save: str
         Path to the folder where to save the data
-    time_length : float
+    time_length: float
         Length of the time window in seconds
     """
     # Ignore warnings
@@ -155,13 +155,13 @@ def download_dataset(folder, remove=False, force_process=False, force_download=F
     (some records are not working)
     Parameters
     ----------
-    folder : str
+    folder: str
         folder where to save the dataset
-    remove : bool
+    remove: bool
         if True, remove the folder before downloading the dataset to save space
-    force_process : bool
+    force_process: bool
         if True, force the processing of the dataset
-    force_download : bool
+    force_download: bool
         if True, force the download of the dataset
     """
     # file where to save the records file (header)
