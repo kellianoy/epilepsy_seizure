@@ -190,11 +190,6 @@ def download_dataset(folder, remove=False):
         for record in f:
             if record[:5] in list_patient:
                 patient = record[:5]
-                # Download the record if it does not exist
-                if not os.path.exists(folder+record.strip()):
-                    print("Downloading "+record.strip() + "...")
-                    urllib.request.urlretrieve(
-                        website+record.strip(), folder+record.strip())
                 # Preprocess the data and save it in numpy format
                 if patient != previous_patient and previous_patient is not None:
                     # Preprocess the previous patient
@@ -209,6 +204,11 @@ def download_dataset(folder, remove=False):
                         # Remove the previous patient folder to save space
                         print("Removing " + previous_patient + "...")
                         shutil.rmtree(folder+previous_patient)
+                # Download the record if it does not exist
+                if not os.path.exists(folder+record.strip()):
+                    print("Downloading "+record.strip() + "...")
+                    urllib.request.urlretrieve(
+                        website+record.strip(), folder+record.strip())
                 previous_patient = patient
     if remove:
         print("Removing " + folder + "...")
