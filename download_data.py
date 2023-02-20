@@ -5,6 +5,8 @@ import csv
 import urllib.request
 import shutil
 import warnings
+
+
 # This is a script to download the data from CHB-MIT scalp EEG database
 # The dataset can be found here: https://archive.physionet.org/pn6/chbmit/
 # Or here: https://physionet.org/content/chbmit/1.0.0/
@@ -26,11 +28,11 @@ def data_to_fft(data):
     """
 
     fft_tensor = np.fft.rfft(data[:, 1:], axis=0)
-    fft_tensor = np.float16(np.log10(np.abs(fft_tensor)+1e-6))
+    fft_tensor = np.float16(np.log10(np.abs(fft_tensor) + 1e-6))
     indices = np.where(fft_tensor <= 0)
     fft_tensor[indices] = 0
 
-    return fft_tensor  # ,freq_array,time_array
+    return fft_tensor
 
 
 def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
@@ -61,36 +63,37 @@ def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient
                u'FP2-F4', u'F4-C4', u'C4-P4', u'P4-O2', u'FP2-F8', u'F8-T8', u'T8-P8', u'FZ-CZ', u'CZ-PZ']
 
     rawEEG = read_raw_edf('%s' % (filename_in),
-                          # exclude=exclude_chs,  #only work in mne 0.16
+                          # exclude=exclude_chs,  # only works in mne 0.16
                           verbose=0, preload=True)
 
     rawEEG.pick_channels(chs)
     tmp = rawEEG.to_data_frame()
     tmp = tmp.to_numpy()
-    time_array = tmp[:, 0]
-    freq_mean = 1000/np.mean(tmp[1:, 0]-tmp[:-1, 0])
+    freq_mean = 1000 / np.mean(tmp[1:, 0] - tmp[:-1, 0])
 
     time_iterator = tmp[0, 0]
     x, y = [], []
-    while time_iterator*1000 + time_length*1000 < tmp[-1, 0]:
-        index_start = int(time_iterator*freq_mean)
-        index_stop = int(index_start + time_length*freq_mean)
+    while time_iterator * 1000 + time_length * 1000 < tmp[-1, 0]:
+        index_start = int(time_iterator * freq_mean)
+        index_stop = int(index_start + time_length * freq_mean)
         data = tmp[index_start:index_stop, 1:]
 
         flag_ictal = 0
 
         for bounds in seizures_time_code:
-            if (bounds[0] < tmp[index_start, 0]/1000 < bounds[1]) and (bounds[0] < tmp[index_stop, 0]/1000 < bounds[1]):
+            if (bounds[0] < tmp[index_start, 0] / 1000 < bounds[1]) and (
+                    bounds[0] < tmp[index_stop, 0] / 1000 < bounds[1]):
                 flag_ictal = 1
 
         x.append(data)
         y.append([flag_ictal, tmp[index_start, 0]])
-        time_iterator += time_length*(1-flag_ictal) + flag_ictal*2/(256)
+        time_iterator += time_length * (1 - flag_ictal) + flag_ictal * 2 / 256
 
     return np.array(x), np.array(y)
 
 
-def preprocess_to_numpy(records_path, seizure_summary_path, database_path, number_of_patient, dir_where_to_save, time_length):
+def preprocess_to_numpy(records_path, seizure_summary_path, database_path, number_of_patient, dir_where_to_save,
+                        time_length):
     """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
     Parameters
     ----------
@@ -123,14 +126,14 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
 
     flag = False
     for filename in csv_reader_list_filename:
-        if int(filename[0][3]+filename[0][4]) == number_of_patient:
+        if int(filename[0][3] + filename[0][4]) == number_of_patient:
             bounds = []
             if filename[0][6:] in liste_bounds[0]:
                 indices = [i for i, x in enumerate(
                     liste_bounds[0]) if x == filename[0][6:]]
                 for indice in indices:
                     bounds.append([liste_bounds[1][indice],
-                                  liste_bounds[2][indice]])
+                                   liste_bounds[2][indice]])
             x, y = edf_to_array(database_path +
                                 filename[0], bounds, time_length, number_of_patient)
             if not flag:
@@ -141,7 +144,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
 
-    patient_file = f"chb0{number_of_patient}"if number_of_patient < 10 else f"chb{number_of_patient}"
+    patient_file = f"chb0{number_of_patient}" if number_of_patient < 10 else f"chb{number_of_patient}"
     if not os.path.exists(dir_where_to_save + patient_file):
         os.makedirs(dir_where_to_save + patient_file)
     np.save(dir_where_to_save + patient_file + "/" + patient_file +
@@ -177,7 +180,7 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
     if not os.path.exists(dataset_folder):
         os.makedirs(dataset_folder)
     if not os.path.exists(records_summary):
-        urllib.request.urlretrieve(website+"RECORDS", records_summary)
+        urllib.request.urlretrieve(website + "RECORDS", records_summary)
     # download the seizure summary file
     if not os.path.exists(seizure_summary):
         urllib.request.urlretrieve(summary, seizure_summary)
@@ -211,12 +214,12 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
                     if remove:
                         # Remove the previous patient eeg_database_folder to save space
                         print("Removing " + previous_patient + "...")
-                        shutil.rmtree(eeg_database_folder+previous_patient)
+                        shutil.rmtree(eeg_database_folder + previous_patient)
                 # Download the record if it does not exist
-                if not os.path.exists(eeg_database_folder+record.strip()) or force_download:
-                    print("Downloading "+record.strip() + "...")
+                if not os.path.exists(eeg_database_folder + record.strip()) or force_download:
+                    print("Downloading " + record.strip() + "...")
                     urllib.request.urlretrieve(
-                        website+record.strip(), eeg_database_folder+record.strip())
+                        website + record.strip(), eeg_database_folder + record.strip())
                 previous_patient = patient
     if remove:
         print("Removing " + eeg_database_folder + "...")
@@ -224,6 +227,5 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
 
 
 if __name__ == "__main__":
-
     folder = "chb-mit-scalp-eeg-database-1.0.0/"
     download_dataset(folder)
