@@ -150,30 +150,32 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
             patient_file + "_y.npy", np.float16(y_master))
 
 
-def download_dataset(folder, remove=False, force_process=False, force_download=False):
+def download_dataset(eeg_database_folder, remove=False, force_process=False, force_download=False):
     """ Download the dataset from the website, limiting the number of records
     (some records are not working)
     Parameters
     ----------
-    folder: str
-        folder where to save the dataset
+    eeg_database_folder: str
+        eeg_database_folder where to save the dataset
     remove: bool
-        if True, remove the folder before downloading the dataset to save space
+        if True, remove the eeg_database_folder before downloading the dataset to save space
     force_process: bool
         if True, force the processing of the dataset
     force_download: bool
         if True, force the download of the dataset
     """
     # file where to save the records file (header)
-    seizure_summary = folder + "seizure_summary.csv"
-    records_summary = folder + "RECORDS"
-    dataset = 'dataset/'
+    seizure_summary = eeg_database_folder + "seizure_summary.csv"
+    records_summary = eeg_database_folder + "RECORDS"
+    dataset_folder = 'dataset/'
     # website where to download the dataset
     website = "https://archive.physionet.org/pn6/chbmit/"
     summary = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
     # download the records file (header)
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+    if not os.path.exists(eeg_database_folder):
+        os.makedirs(eeg_database_folder)
+    if not os.path.exists(dataset_folder):
+        os.makedirs(dataset_folder)
     if not os.path.exists(records_summary):
         urllib.request.urlretrieve(website+"RECORDS", records_summary)
     # download the seizure summary file
@@ -182,12 +184,9 @@ def download_dataset(folder, remove=False, force_process=False, force_download=F
     # For each patient we are interested in, download the records
     patients = {}
     for i in [2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]:
-        # Retrieve summary of seizures
+        # Retrieve summary eeg_database_folderof seizures
         current_patient = f"chb0{i}" if i < 10 else f"chb{i}"
         patients[current_patient] = i
-        # Create the folder for the patient
-        if not os.path.exists(folder+current_patient):
-            os.makedirs(folder+current_patient)
 
     # Open records summary, and for each line, download the record.
     previous_patient = None
@@ -196,30 +195,32 @@ def download_dataset(folder, remove=False, force_process=False, force_download=F
             # patients is a dictionary of patients we are interested in
             if record[:5] in patients.keys():
                 patient = record[:5]
+                if not os.path.exists(eeg_database_folder + patient):
+                    os.makedirs(eeg_database_folder + patient)
                 # Preprocess the data and save it in numpy format
                 if patient != previous_patient and previous_patient is not None:
                     # Preprocess the previous patient
-                    if not os.path.exists(dataset + previous_patient) or force_process:
+                    if not os.path.exists(dataset_folder + previous_patient) or force_process:
                         print("Preprocessing " + previous_patient + "...")
                         preprocess_to_numpy(records_summary,
                                             seizure_summary,
-                                            folder,
+                                            eeg_database_folder,
                                             patients[previous_patient],
-                                            dataset,
+                                            dataset_folder,
                                             1)
                         if remove:
-                            # Remove the previous patient folder to save space
+                            # Remove the previous patient eeg_database_folder to save space
                             print("Removing " + previous_patient + "...")
-                            shutil.rmtree(folder+previous_patient)
+                            shutil.rmtree(eeg_database_folder+previous_patient)
                 # Download the record if it does not exist
-                if not os.path.exists(folder+record.strip()) or force_download:
+                if not os.path.exists(eeg_database_folder+record.strip()) or force_download:
                     print("Downloading "+record.strip() + "...")
                     urllib.request.urlretrieve(
-                        website+record.strip(), folder+record.strip())
+                        website+record.strip(), eeg_database_folder+record.strip())
                 previous_patient = patient
     if remove:
-        print("Removing " + folder + "...")
-        shutil.rmtree(folder)
+        print("Removing " + eeg_database_folder + "...")
+        shutil.rmtree(eeg_database_folder)
 
 
 if __name__ == "__main__":
