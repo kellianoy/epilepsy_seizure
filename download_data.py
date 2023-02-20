@@ -186,7 +186,7 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         urllib.request.urlretrieve(summary, seizure_summary)
     # For each patient we are interested in, download the records
     patients = {}
-    for i in [2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]:
+    for i in [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]:
         # Retrieve summary eeg_database_folderof seizures
         current_patient = f"chb0{i}" if i < 10 else f"chb{i}"
         patients[current_patient] = i
