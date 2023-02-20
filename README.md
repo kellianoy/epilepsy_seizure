@@ -17,12 +17,12 @@ Data Ramp-compliant project on the subject of the classification of epilepsy sei
 
 ## Installation
 
-For pip you can install the requirements with:
+If you are using pip you can install the requirements with:
 ```bash
 pip install -r requirements.txt
 ```
 
-For conda you can install the requirements with:
+If you are using conda you can install the requirements with:
 ```bash
 conda env create -f environment.yml
 ```

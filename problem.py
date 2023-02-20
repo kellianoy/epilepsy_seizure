@@ -4,9 +4,9 @@ import os
 
 problem_title = 'Predection of seizure'
 
-_prediction_label_name = [1,2,3,4] # TODO
+_prediction_label_name = [1, 2, 3, 4] # TODO
 
-Prediction = rf.prediction_types.make_multiclass( label_names = _prediction_label_name)
+Prediction = rf.prediction_types.make_multiclass(label_names=_prediction_label_name)
 
 workflow = rf.workflows.Estimator() # TODO
 
