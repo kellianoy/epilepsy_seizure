@@ -208,10 +208,10 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
                                             patients[previous_patient],
                                             dataset_folder,
                                             1)
-                        if remove:
-                            # Remove the previous patient eeg_database_folder to save space
-                            print("Removing " + previous_patient + "...")
-                            shutil.rmtree(eeg_database_folder+previous_patient)
+                    if remove:
+                        # Remove the previous patient eeg_database_folder to save space
+                        print("Removing " + previous_patient + "...")
+                        shutil.rmtree(eeg_database_folder+previous_patient)
                 # Download the record if it does not exist
                 if not os.path.exists(eeg_database_folder+record.strip()) or force_download:
                     print("Downloading "+record.strip() + "...")
