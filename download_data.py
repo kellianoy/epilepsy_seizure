@@ -3,7 +3,8 @@ import numpy as np
 from mne.io import read_raw_edf
 import csv
 import urllib.request
-
+import shutil
+import warnings
 # This is a script to download the data from CHB-MIT scalp EEG database
 # The dataset can be found here: https://archive.physionet.org/pn6/chbmit/
 # Or here: https://physionet.org/content/chbmit/1.0.0/
@@ -32,20 +33,24 @@ def data_to_fft(data):
     return fft_tensor  # ,freq_array,time_array
 
 
-def edf_to_array(filename_in, seizures_time_code, time_lenght, number_of_patient):
-    """
+def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
+    """ Convert an edf file to a numpy array
+    Parameters
+    ----------
+    filename_in : str
+        Name of the file to convert
+    seizures_time_code : list
+        List of the time of the seizures
+    time_length : float
+        Length of the time window in seconds
+    number_of_patient : int
 
-
-        Parameters
-        ----------
-        filename_in : str
-
-        filename_out : str
-
-        seizures_time_code : list
-
-        time_lenght : int
-
+    Returns
+    ----------
+    x: numpy array
+        Array of the data
+    y: numpy array
+        Array of the labels
     """
 
     if number_of_patient == 16:
@@ -67,11 +72,9 @@ def edf_to_array(filename_in, seizures_time_code, time_lenght, number_of_patient
 
     time_iterator = tmp[0, 0]
     x, y = [], []
-
-    print(seizures_time_code)
-    while time_iterator*1000 + time_lenght*1000 < tmp[-1, 0]:
+    while time_iterator*1000 + time_length*1000 < tmp[-1, 0]:
         index_start = int(time_iterator*freq_mean)
-        index_stop = int(index_start + time_lenght*freq_mean)
+        index_stop = int(index_start + time_length*freq_mean)
         data = tmp[index_start:index_stop, 1:]
 
         flag_ictal = 0
@@ -82,12 +85,12 @@ def edf_to_array(filename_in, seizures_time_code, time_lenght, number_of_patient
 
         x.append(data)
         y.append([flag_ictal, tmp[index_start, 0]])
-        time_iterator += time_lenght*(1-flag_ictal) + flag_ictal*2/(256)
+        time_iterator += time_length*(1-flag_ictal) + flag_ictal*2/(256)
 
     return np.array(x), np.array(y)
 
 
-def preprocess_to_numpy(records_path, seizure_summary_path, database_path, number_of_patient, dir_where_to_save, time_lenght):
+def preprocess_to_numpy(records_path, seizure_summary_path, database_path, number_of_patient, dir_where_to_save, time_length):
     """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
     Parameters
     ----------
@@ -97,7 +100,15 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
         Name of the file containing the list of the filename of the data
     database_path : str
         Path to the folder containing the data
+    number_of_patient : int
+        Number of the patient
+    dir_where_to_save : str
+        Path to the folder where to save the data
+    time_length : float
+        Length of the time window in seconds
     """
+    # Ignore warnings
+    warnings.filterwarnings("ignore")
     csv_file = open(seizure_summary_path)
     csv_reader_bounds = csv.reader(csv_file, delimiter=',')
     liste_bounds = [[], [], []]
@@ -110,7 +121,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
     csv_file = open(records_path)
     csv_reader_list_filename = csv.reader(csv_file, delimiter=',')
 
-    flag = 0
+    flag = False
     for filename in csv_reader_list_filename:
         if int(filename[0][3]+filename[0][4]) == number_of_patient:
             bounds = []
@@ -120,20 +131,17 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
                 for indice in indices:
                     bounds.append([liste_bounds[1][indice],
                                   liste_bounds[2][indice]])
-            print(filename)
             x, y = edf_to_array(database_path +
-                                filename[0], bounds, time_lenght, number_of_patient)
-            if flag == 0:
+                                filename[0], bounds, time_length, number_of_patient)
+            if not flag:
                 x_master = np.copy(x)
                 y_master = np.copy(y)
-                flag = 1
+                flag = True
             else:
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
 
-    patient_file = "chb0" + \
-        str(number_of_patient) if number_of_patient < 10 else "chb" + \
-        str(number_of_patient)
+    patient_file = f"chb0{number_of_patient}"if number_of_patient < 10 else f"chb{number_of_patient}"
     if not os.path.exists(dir_where_to_save + patient_file):
         os.makedirs(dir_where_to_save + patient_file)
     np.save(dir_where_to_save + patient_file + "/" + patient_file +
@@ -150,41 +158,57 @@ def download_dataset(folder):
     folder : str
         folder where to save the dataset
     """
+    # file where to save the records file (header)
     seizure_summary = folder + "seizure_summary.csv"
     records_summary = folder + "RECORDS"
-
-    if not os.path.exists(folder):
-        os.makedirs(folder)
     # website where to download the dataset
     website = "https://archive.physionet.org/pn6/chbmit/"
     summary = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
     # download the records file (header)
+    if not os.path.exists(folder):
+        os.makedirs(folder)
     if not os.path.exists(records_summary):
         urllib.request.urlretrieve(website+"RECORDS", records_summary)
     # download the seizure summary file
     if not os.path.exists(seizure_summary):
         urllib.request.urlretrieve(summary, seizure_summary)
     # For each patient we are interested in, download the records
+    list_patient = []
     for i in [2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]:
         # Retrieve summary of seizures
-        current_patient = "chb0"+str(i) if i < 10 else "chb"+str(i)
-        # read records pertaining to current patient and download the files
+        current_patient = f"chb0{i}" if i < 10 else f"chb{i}"
+        list_patient.append(current_patient)
+        # Create the folder for the patient
         if not os.path.exists(folder+current_patient):
             os.makedirs(folder+current_patient)
-        with open(records_summary, "r") as f:
-            records = f.readlines()
-            for record in records:
-                if record.startswith(current_patient) and not os.path.exists(folder+record.strip()):
+
+    # Open records summary, and for each line, download the record.
+    previous_patient = None
+    with open(records_summary) as f:
+        for record in f:
+            if record[:5] in list_patient:
+                patient = record[:5]
+                # Download the record if it does not exist
+                if not os.path.exists(folder+record.strip()):
+                    print("Downloading "+record.strip() + "...")
                     urllib.request.urlretrieve(
                         website+record.strip(), folder+record.strip())
-                    print("Downloaded "+record.strip())
-        # Preprocess the data and save it in numpy format
-        preprocess_to_numpy(records_summary,
-                            seizure_summary,
-                            folder,
-                            i,
-                            'dataset/',
-                            1)
+                # Preprocess the data and save it in numpy format
+                if patient != previous_patient and previous_patient is not None:
+                    # Preprocess the previous patient
+                    print("Preprocessing " + previous_patient + "...")
+                    preprocess_to_numpy(records_summary,
+                                        seizure_summary,
+                                        folder,
+                                        int(previous_patient[-1]),
+                                        'dataset/',
+                                        1)
+                    # Remove the previous patient folder to save space
+                    print("Removing " + previous_patient + "...")
+                    shutil.rmtree(folder+previous_patient)
+                previous_patient = patient
+    print("Removing " + folder + "...")
+    shutil.rmtree(folder)
 
 
 if __name__ == "__main__":
