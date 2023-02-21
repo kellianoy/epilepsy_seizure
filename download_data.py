@@ -139,7 +139,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
         open(seizure_summary_path, 'r'), delimiter=',')
     liste_bounds = [[], [], []]
     for row in csv_reader_bounds:
-        if row != [] and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
+        if not row and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
             liste_bounds[0].append(row[0])
             liste_bounds[1].append(float(row[1]))
             liste_bounds[2].append(float(row[2]))
@@ -195,11 +195,7 @@ def train_test_split(X, y, split=0.8):
     y_test: np.array
     """
     # Split the data into train and test sets
-    X_train = X[:int(split * X.shape[0])]
-    X_test = X[int(split * X.shape[0]):]
-    y_train = y[:int(split * y.shape[0])]
-    y_test = y[int(split * y.shape[0]):]
-    return X_train, X_test, y_train, y_test
+    return X[:int(split * X.shape[0])], X[int(split * X.shape[0]):], y[:int(split * y.shape[0])], y[int(split * y.shape[0]):]
 
 
 def downsample_shuffle_split(X, y):
@@ -327,7 +323,8 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         # Create patient folder
         os.makedirs(eeg_database_folder + patient, exist_ok=True)
         # Download the files using multiprocessing -> if an error occurs, retry
-        while True:
+        retries = 10
+        while retries:
             try:
                 print("Downloading " + patient + "...")
                 with Pool(cpu_count()) as p:
@@ -337,6 +334,7 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
                 print(type(e))
                 print(
                     f"An error occurred while downloading a file of {patient}. Retrying...")
+                retries -= 1
             else:
                 break
         # Preprocess the data
