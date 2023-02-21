@@ -277,19 +277,16 @@ def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
     # Trim training set data to minimum length
     X_train = [data[:train_min_len] for data in X_train]
     y_train = [data[:train_min_len] for data in y_train]
-
     # Find minimum length of the data for test set
     test_min_len = min([data.shape[0] for data in X_test])
     # Trim test set data to minimum length
     X_test = [data[:test_min_len] for data in X_test]
     y_test = [data[:test_min_len] for data in y_test]
-
     # Concatenate training and test sets
     X_train = np.concatenate(X_train)
     y_train = np.concatenate(y_train)
     X_test = np.concatenate(X_test)
     y_test = np.concatenate(y_test)
-
     # Save preprocessed data to disk
     np.save(dataset_folder + "X_train.npy", X_train)
     np.save(dataset_folder + "y_train.npy", y_train)
