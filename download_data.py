@@ -166,7 +166,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
     x_master, y_master = remove_hours(x_master, y_master)
     # Split the data into train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
-        x_master, y_master, patient_id, output_folder)
+        x_master, y_master, split=0.8)
     # Downsample the data
     X_train, y_train = downsample_shuffle_split(X_train, y_train)
     X_test, y_test = downsample_shuffle_split(X_test, y_test)
@@ -174,7 +174,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
     return X_train, X_test, y_train, y_test
 
 
-def train_test_split(X, y, patient_id, save_folder, split=0.8):
+def train_test_split(X, y, split=0.8):
     """ Split the data into train and test sets for a given patient
     Parameters
     ----------
@@ -182,10 +182,6 @@ def train_test_split(X, y, patient_id, save_folder, split=0.8):
         Data
     y: np.array
         Labels
-    patient_id: int
-        Number of the patient
-    save_folder: str
-        Path to the folder where to save the data
     split: float
         Percentage of the data to use for training
     Returns
@@ -198,9 +194,6 @@ def train_test_split(X, y, patient_id, save_folder, split=0.8):
         Training labels
     y_test: np.array
     """
-    patient_file = f"chb0{patient_id}" if patient_id < 10 else f"chb{patient_id}"
-    if not os.path.exists(save_folder + patient_file):
-        os.makedirs(save_folder + patient_file)
     # Split the data into train and test sets
     X_train = X[:int(split * X.shape[0])]
     X_test = X[int(split * X.shape[0]):]
