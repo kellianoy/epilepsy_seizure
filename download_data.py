@@ -219,7 +219,7 @@ def downsample_shuffle_split(X, y):
     return X[random_indices], y[random_indices]
 
 
-def download_file(source, destination, force_download=False):
+def download_file(source, destination, retries=10, force_download=False):
     """ Download a file from a source to a destination
     Parameters
     ----------
@@ -227,15 +227,23 @@ def download_file(source, destination, force_download=False):
         Source of the file
     destination: str
         Destination of the file
+    retries: int
+        Number of retries if the download fails
     force_download: bool
         if True, force the download of the file
     """
     if os.path.exists(destination) and not force_download:
         print("File " + destination + " already exists.")
         return
-    print("Downloading " + source + " to " + destination + "...")
-    urllib.request.urlretrieve(source, destination)
-    print("Downloaded " + source + ".")
+    while retries > 0:
+        try:
+            print("Downloading " + source + " to " + destination + "...")
+            urllib.request.urlretrieve(source, destination)
+            print("Downloaded " + source + ".")
+            break
+        except:
+            retries -= 1
+            print("Retrying download of " + source + "...")
 
 
 def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
@@ -322,21 +330,17 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         patient_files = [file for file in summary if patient in file]
         # Create patient folder
         os.makedirs(eeg_database_folder + patient, exist_ok=True)
-        # Download the files using multiprocessing -> if an error occurs, retry
-        retries = 10
-        while retries:
-            try:
-                print("Downloading " + patient + "...")
-                with Pool(cpu_count()) as p:
-                    p.starmap(download_file, [(website + file, eeg_database_folder + file, force_download)
-                                              for file in patient_files])
-            except Exception as e:
-                print(type(e))
-                print(
-                    f"An error occurred while downloading a file of {patient}. Retrying...")
-                retries -= 1
-            else:
-                break
+        # Download the files contained in patient_files, if the download fails
+        # Retry 5 times max the whole download, and 10 times max for each file
+        # Use multiprocessing to speed up the download (the website limits to 2mo/s)
+        retries = 5
+        while not all([os.path.exists(eeg_database_folder + file) for file in patient_files]):
+            if retries == 0:
+                raise Exception("Download failed for patient " + patient)
+            with Pool(cpu_count()) as p:
+                p.starmap(download_file, [(website + file, eeg_database_folder + file, 10, force_download)
+                                          for file in patient_files])
+            retries -= 1
         # Preprocess the data
         print("Preprocessing " + patient + "...")
         X_train_patient, X_test_patient, y_train_patient, y_test_patient = preprocess_to_numpy(records_summary,
