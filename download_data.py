@@ -3,34 +3,17 @@ import numpy as np
 from mne.io import read_raw_edf
 import csv
 import urllib.request
-import shutil
+import urllib.error
 import warnings
+from multiprocessing import cpu_count, Pool
 
 
 # This is a script to download the data from CHB-MIT scalp EEG database
 # The dataset can be found here: https://archive.physionet.org/pn6/chbmit/
 # Or here: https://physionet.org/content/chbmit/1.0.0/
 # Recordings, grouped into 23 cases, were collected from 22 subjects
-
-
-def data_to_fft(data):
-    """
-        Returns n x T array, n and T being respectively number of channel in data,
-        and number of time bin in data
-
-        Parameters
-        ----------
-        data:  array of data from CHB-MIT dataset
-
-        Returns
-        ----------
-        numpy array
-    """
-    fft_tensor = np.fft.rfft(data[:, 1:], axis=0)
-    fft_tensor = np.float16(np.log10(np.abs(fft_tensor) + 1e-6))
-    indices = np.where(fft_tensor <= 0)
-    fft_tensor[indices] = 0
-    return fft_tensor
+PATIENTS_LIST = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]
+PATIENTS_SIZE = len(PATIENTS_LIST)
 
 
 def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
@@ -152,17 +135,15 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
     """
     # Ignore warnings
     warnings.filterwarnings("ignore")
-    csv_file = open(seizure_summary_path)
-    csv_reader_bounds = csv.reader(csv_file, delimiter=',')
+    csv_reader_bounds = csv.reader(
+        open(seizure_summary_path, 'r'), delimiter=',')
     liste_bounds = [[], [], []]
     for row in csv_reader_bounds:
         if row != [] and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
             liste_bounds[0].append(row[0])
             liste_bounds[1].append(float(row[1]))
             liste_bounds[2].append(float(row[2]))
-
-    csv_file = open(records_path)
-    csv_reader_list_filename = csv.reader(csv_file, delimiter=',')
+    csv_reader_list_filename = csv.reader(open(records_path), delimiter=',')
     flag = False
     for filename in csv_reader_list_filename:
         if int(filename[0][3] + filename[0][4]) == patient_id:
@@ -182,12 +163,19 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
             else:
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
-    X, y = remove_hours(x_master, y_master)
-    save_numpy(X, y, patient_id, output_folder)
+    x_master, y_master = remove_hours(x_master, y_master)
+    # Split the data into train and test sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        x_master, y_master, patient_id, output_folder)
+    # Downsample the data
+    X_train, y_train = downsample_shuffle_split(X_train, y_train)
+    X_test, y_test = downsample_shuffle_split(X_test, y_test)
+
+    return X_train, X_test, y_train, y_test
 
 
-def save_numpy(X, y, patient_id, save_folder, split=0.8):
-    """ Save the data in numpy format and divide it into train and test sets
+def train_test_split(X, y, patient_id, save_folder, split=0.8):
+    """ Split the data into train and test sets for a given patient
     Parameters
     ----------
     X: np.array
@@ -200,8 +188,16 @@ def save_numpy(X, y, patient_id, save_folder, split=0.8):
         Path to the folder where to save the data
     split: float
         Percentage of the data to use for training
+    Returns
+    -------
+    X_train: np.array
+        Training data
+    X_test: np.array
+        Test data
+    y_train: np.array
+        Training labels
+    y_test: np.array
     """
-
     patient_file = f"chb0{patient_id}" if patient_id < 10 else f"chb{patient_id}"
     if not os.path.exists(save_folder + patient_file):
         os.makedirs(save_folder + patient_file)
@@ -210,12 +206,86 @@ def save_numpy(X, y, patient_id, save_folder, split=0.8):
     X_test = X[int(split * X.shape[0]):]
     y_train = y[:int(split * y.shape[0])]
     y_test = y[int(split * y.shape[0]):]
-    sets = {"X_train": X_train, "X_test": X_test,
-            "y_train": y_train, "y_test": y_test}
-    # Save the data
-    for s in sets:
-        np.save(save_folder + patient_file + "/" + patient_file +
-                "_" + s + ".npy", np.float16(sets[s]))
+    return X_train, X_test, y_train, y_test
+
+
+def downsample_shuffle_split(X, y):
+    """ Downsample X, y by the number of patients and shuffle the data
+    Parameters
+    ----------
+    X: np.array
+        Data
+    y: np.array
+        Labels
+    Returns
+    ----------
+    X_downsampled: np.array
+        Downsampled data
+    y_downsampled: np.array
+        Downsampled labels
+    """
+    np.random.seed(2102)
+    random_indices = np.random.choice(
+        X.shape[0], X.shape[0] // PATIENTS_SIZE, replace=False)
+    return X[random_indices], y[random_indices]
+
+
+def download_file(source, destination, force_download=False):
+    """ Download a file from a source to a destination
+    Parameters
+    ----------
+    source: str
+        Source of the file
+    destination: str
+        Destination of the file
+    force_download: bool
+        if True, force the download of the file
+    """
+    if os.path.exists(destination) and not force_download:
+        print("File " + destination + " already exists.")
+        return
+    print("Downloading " + source + " to " + destination + "...")
+    urllib.request.urlretrieve(source, destination)
+    print("Downloaded " + source + ".")
+
+
+def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
+    """ Normalize the data and save it
+    Parameters
+    ----------
+    X_train: list of np.array
+        Training data list
+    y_train: list of np.array
+        Training labels list
+    X_test: list of np.array
+        Test data list
+    y_test: list of np.array
+        Test labels list
+    dataset_folder: str
+    """
+    # Find minimum length of the data for training set
+    train_min_len = min([data.shape[0] for data in X_train])
+    # Trim training set data to minimum length
+    X_train = [data[:train_min_len] for data in X_train]
+    y_train = [data[:train_min_len] for data in y_train]
+
+    # Find minimum length of the data for test set
+    test_min_len = min([data.shape[0] for data in X_test])
+    # Trim test set data to minimum length
+    X_test = [data[:test_min_len] for data in X_test]
+    y_test = [data[:test_min_len] for data in y_test]
+
+    # Concatenate training and test sets
+    X_train = np.concatenate(X_train)
+    y_train = np.concatenate(y_train)
+    X_test = np.concatenate(X_test)
+    y_test = np.concatenate(y_test)
+
+    # Save preprocessed data to disk
+    np.save(dataset_folder + "X_train.npy", X_train)
+    np.save(dataset_folder + "y_train.npy", y_train)
+    np.save(dataset_folder + "X_test.npy", X_test)
+    np.save(dataset_folder + "y_test.npy", y_test)
 
 
 def download_dataset(eeg_database_folder, remove=False, force_process=False, force_download=False):
@@ -247,40 +317,46 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
     if not os.path.exists(seizure_summary):
         urllib.request.urlretrieve(summary, seizure_summary)
     # For each patient we are interested in
-    patients = {f"chb{i:02d}": i for i in [
-        1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]}
-    # Open records summary, and for each line, download the record.
-    previous_patient = None
+    patients = {f"chb{i:02d}": i for i in PATIENTS_LIST}
+    # Read the records summary file to get the list of files
     with open(records_summary) as f:
-        for record in f:
-            # patients is a dictionary of patients we are interested in
-            if record[:5] in patients.keys():
-                patient = record[:5]
-                os.makedirs(eeg_database_folder + patient, exist_ok=True)
-                # Preprocess the data and save it in numpy format
-                if patient != previous_patient and previous_patient is not None:
-                    # Preprocess the previous patient
-                    if not os.path.exists(dataset_folder + previous_patient) or force_process:
-                        print("Preprocessing " + previous_patient + "...")
-                        preprocess_to_numpy(records_summary,
-                                            seizure_summary,
-                                            eeg_database_folder,
-                                            patients[previous_patient],
-                                            dataset_folder,
-                                            1)
-                    if remove:
-                        # Remove the previous patient eeg_database_folder to save space
-                        print("Removing " + previous_patient + "...")
-                        shutil.rmtree(eeg_database_folder + previous_patient)
-                # Download the record if it does not exist
-                if not os.path.exists(eeg_database_folder + record.strip()) or force_download:
-                    print("Downloading " + record.strip() + "...")
-                    urllib.request.urlretrieve(
-                        website + record.strip(), eeg_database_folder + record.strip())
-                previous_patient = patient
-    if remove:
-        print("Removing " + eeg_database_folder + "...")
-        shutil.rmtree(eeg_database_folder)
+        summary = f.read().splitlines()
+    X_train, y_train, X_test, y_test = [], [], [], []
+    for patient in patients.keys():
+        # Get the list of files for the current patient
+        patient_files = [file for file in summary if patient in file]
+        # Create patient folder
+        os.makedirs(eeg_database_folder + patient, exist_ok=True)
+        # Download the files using multiprocessing -> if an error occurs, retry
+        while True:
+            try:
+                print("Downloading " + patient + "...")
+                with Pool(cpu_count()) as p:
+                    p.starmap(download_file, [(website + file, eeg_database_folder + file, force_download)
+                                              for file in patient_files])
+            except Exception as e:
+                print(type(e))
+                print(
+                    f"An error occurred while downloading a file of {patient}. Retrying...")
+            else:
+                break
+        # Preprocess the data
+        print("Preprocessing " + patient + "...")
+        X_train_patient, X_test_patient, y_train_patient, y_test_patient = preprocess_to_numpy(records_summary,
+                                                                                               seizure_summary,
+                                                                                               eeg_database_folder,
+                                                                                               patients[patient],
+                                                                                               dataset_folder,
+                                                                                               1)
+        X_train.append(X_train_patient)
+        X_test.append(X_test_patient)
+        y_train.append(y_train_patient)
+        y_test.append(y_test_patient)
+    if remove and os.path.exists(eeg_database_folder + patient):
+        shutil.rmtree(eeg_database_folder + patient)
+    # Normalize the data and save it
+    print("Normalizing data and saving it...")
+    normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder)
 
 
 if __name__ == "__main__":
