@@ -26,17 +26,15 @@ def data_to_fft(data):
         ----------
         numpy array
     """
-
     fft_tensor = np.fft.rfft(data[:, 1:], axis=0)
     fft_tensor = np.float16(np.log10(np.abs(fft_tensor) + 1e-6))
     indices = np.where(fft_tensor <= 0)
     fft_tensor[indices] = 0
-
     return fft_tensor
 
 
 def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
-    """ Convert an edf file to a numpy array
+    """ Convert an edf file containing eeg of seizures to a numpy array
     Parameters
     ----------
     filename_in: str
@@ -54,45 +52,87 @@ def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient
     y: numpy array
         Array of the labels
     """
-
-    if number_of_patient == 16:
-        chs = [u'FP1-F7', u'F7-T7', u'T7-P7', u'P7-O1', u'FP1-F3', u'F3-C3', u'C3-P3', u'P3-O1',
-               u'FP2-F4', u'F4-C4', u'C4-P4', u'P4-O2', u'FP2-F8', u'F8-T8', u'T8-P8', u'FZ-CZ', u'CZ-PZ']
-    else:
-        chs = [u'FP1-F7', u'F7-T7', u'T7-P7', u'P7-O1', u'FP1-F3', u'F3-C3', u'C3-P3', u'P3-O1',
-               u'FP2-F4', u'F4-C4', u'C4-P4', u'P4-O2', u'FP2-F8', u'F8-T8', u'T8-P8', u'FZ-CZ', u'CZ-PZ']
-
-    rawEEG = read_raw_edf('%s' % (filename_in),
-                          # exclude=exclude_chs,  # only works in mne 0.16
-                          verbose=0, preload=True)
-
-    rawEEG.pick_channels(chs)
-    tmp = rawEEG.to_data_frame()
-    tmp = tmp.to_numpy()
+    channel_names = [u'FP1-F7', u'F7-T7', u'T7-P7', u'P7-O1', u'FP1-F3', u'F3-C3', u'C3-P3', u'P3-O1',
+                     u'FP2-F4', u'F4-C4', u'C4-P4', u'P4-O2', u'FP2-F8', u'F8-T8', u'T8-P8', u'FZ-CZ', u'CZ-PZ']
+    if number_of_patient != 16:
+        channel_names.remove(u'FZ-CZ')
+    # Only works in MNE 1.0.0
+    raw_egg = read_raw_edf('%s' % (filename_in), verbose=0, preload=True)
+    raw_egg.pick_channels(channel_names)
+    tmp = raw_egg.to_data_frame().to_numpy()
     freq_mean = 1000 / np.mean(tmp[1:, 0] - tmp[:-1, 0])
-
     time_iterator = tmp[0, 0]
-    x, y = [], []
-    while time_iterator * 1000 + time_length * 1000 < tmp[-1, 0]:
+    X, y = [], []
+    while (time_iterator + time_length)*1000 < tmp[-1, 0]:
         index_start = int(time_iterator * freq_mean)
         index_stop = int(index_start + time_length * freq_mean)
         data = tmp[index_start:index_stop, 1:]
-
         flag_ictal = 0
-
         for bounds in seizures_time_code:
             if (bounds[0] < tmp[index_start, 0] / 1000 < bounds[1]) and (
                     bounds[0] < tmp[index_stop, 0] / 1000 < bounds[1]):
                 flag_ictal = 1
-
-        x.append(data)
+        X.append(data)
         y.append([flag_ictal, tmp[index_start, 0]])
         time_iterator += time_length * (1 - flag_ictal) + flag_ictal * 2 / 256
+    return np.array(X), np.array(y)
 
-    return np.array(x), np.array(y)
+
+def remove_hours(X, y):
+    """ Remove 4 hours before and after an epilepsy seizure
+    Parameters
+    ----------
+    X: numpy array
+        Array of the data
+    y: numpy array
+        Array of the labels
+
+    Returns
+    ----------
+    X_interictal: numpy array
+        Array of the data with 4 hours before and after an epilepsy seizure removed
+    y_interictal: numpy array
+        Array of the labels with 4 hours before and after an epilepsy seizure removed
+    """
+    acc = 0
+    y[:, 1] = y[:, 1]/1000
+    y_new = np.zeros(y.shape[0])
+    for i in range(y.shape[0]-1):
+        y_new[i] = acc + y[i, 1]
+        if y[i+1, 1] == 0.0:
+            # print(i,y[i-1,1])
+            acc += y[i, 1]
+    y_new[-1] = acc + y[-1, 1]
+    y_interictal = np.ones(y_new.shape)
+    ictal_memory = 0
+    flag_bord = 0
+    for i in range(len(y[:, 1])-1):
+        if y[i, 0] == 1 and y[i+1, 0] == 0:
+            ictal_memory = i
+            flag_bord = 1
+        if (y_new[i] < y_new[ictal_memory]+4*3600 or y[i, 0] == 1) and flag_bord:
+            y_interictal[i] = 0
+    ictal_memory = -1
+    flag_bord = 0
+    for i in range(len(y[:, 1])-1, 0, -1):
+        if y[i, 0] == 1 and y[i-1, 0] == 0:
+            ictal_memory = i
+            flag_bord = 1
+        if (y_new[i] > y_new[ictal_memory]-4*3600 or y[i, 0] == 1) and flag_bord:
+            y_interictal[i] = 0
+    x_to_save = []
+    y_to_save = []
+    for i in range(y.shape[0]):
+        if y[i, 0] == 1:
+            x_to_save.append(X[i])
+            y_to_save.append(1)
+        elif y_interictal[i] == 1:
+            x_to_save.append(X[i])
+            y_to_save.append(0)
+    return np.array(x_to_save), np.array(y_to_save)
 
 
-def preprocess_to_numpy(records_path, seizure_summary_path, database_path, number_of_patient, dir_where_to_save,
+def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patient_id, output_folder,
                         time_length):
     """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
     Parameters
@@ -103,9 +143,9 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
         Name of the file containing the list of the filename of the data
     database_path: str
         Path to the folder containing the data
-    number_of_patient: int
+    patient_id: int
         Number of the patient
-    dir_where_to_save: str
+    output_folder: str
         Path to the folder where to save the data
     time_length: float
         Length of the time window in seconds
@@ -123,10 +163,9 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
 
     csv_file = open(records_path)
     csv_reader_list_filename = csv.reader(csv_file, delimiter=',')
-
     flag = False
     for filename in csv_reader_list_filename:
-        if int(filename[0][3] + filename[0][4]) == number_of_patient:
+        if int(filename[0][3] + filename[0][4]) == patient_id:
             bounds = []
             if filename[0][6:] in liste_bounds[0]:
                 indices = [i for i, x in enumerate(
@@ -135,7 +174,7 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
                     bounds.append([liste_bounds[1][indice],
                                    liste_bounds[2][indice]])
             x, y = edf_to_array(database_path +
-                                filename[0], bounds, time_length, number_of_patient)
+                                filename[0], bounds, time_length, patient_id)
             if not flag:
                 x_master = np.copy(x)
                 y_master = np.copy(y)
@@ -143,14 +182,40 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, numbe
             else:
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
+    X, y = remove_hours(x_master, y_master)
+    save_numpy(X, y, patient_id, output_folder)
 
-    patient_file = f"chb0{number_of_patient}" if number_of_patient < 10 else f"chb{number_of_patient}"
-    if not os.path.exists(dir_where_to_save + patient_file):
-        os.makedirs(dir_where_to_save + patient_file)
-    np.save(dir_where_to_save + patient_file + "/" + patient_file +
-            "_X.npy", np.float16(x_master))
-    np.save(dir_where_to_save + patient_file + "/" +
-            patient_file + "_y.npy", np.float16(y_master))
+
+def save_numpy(X, y, patient_id, save_folder, split=0.8):
+    """ Save the data in numpy format and divide it into train and test sets
+    Parameters
+    ----------
+    X: np.array
+        Data
+    y: np.array
+        Labels
+    patient_id: int
+        Number of the patient
+    save_folder: str
+        Path to the folder where to save the data
+    split: float
+        Percentage of the data to use for training
+    """
+
+    patient_file = f"chb0{patient_id}" if patient_id < 10 else f"chb{patient_id}"
+    if not os.path.exists(save_folder + patient_file):
+        os.makedirs(save_folder + patient_file)
+    # Split the data into train and test sets
+    X_train = X[:int(split * X.shape[0])]
+    X_test = X[int(split * X.shape[0]):]
+    y_train = y[:int(split * y.shape[0])]
+    y_test = y[int(split * y.shape[0]):]
+    sets = {"X_train": X_train, "X_test": X_test,
+            "y_train": y_train, "y_test": y_test}
+    # Save the data
+    for s in sets:
+        np.save(save_folder + patient_file + "/" + patient_file +
+                "_" + s + ".npy", np.float16(sets[s]))
 
 
 def download_dataset(eeg_database_folder, remove=False, force_process=False, force_download=False):
@@ -167,30 +232,23 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
     force_download: bool
         if True, force the download of the dataset
     """
-    # file where to save the records file (header)
+    # file paths
     seizure_summary = eeg_database_folder + "seizure_summary.csv"
     records_summary = eeg_database_folder + "RECORDS"
     dataset_folder = 'dataset/'
-    # website where to download the dataset
     website = "https://archive.physionet.org/pn6/chbmit/"
     summary = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
-    # download the records file (header)
-    if not os.path.exists(eeg_database_folder):
-        os.makedirs(eeg_database_folder)
-    if not os.path.exists(dataset_folder):
-        os.makedirs(dataset_folder)
+    # create required folders
+    os.makedirs(eeg_database_folder, exist_ok=True)
+    os.makedirs(dataset_folder, exist_ok=True)
+    # download seizure summary and records files if they don't exist
     if not os.path.exists(records_summary):
         urllib.request.urlretrieve(website + "RECORDS", records_summary)
-    # download the seizure summary file
     if not os.path.exists(seizure_summary):
         urllib.request.urlretrieve(summary, seizure_summary)
-    # For each patient we are interested in, download the records
-    patients = {}
-    for i in [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]:
-        # Retrieve summary eeg_database_folderof seizures
-        current_patient = f"chb0{i}" if i < 10 else f"chb{i}"
-        patients[current_patient] = i
-
+    # For each patient we are interested in
+    patients = {f"chb{i:02d}": i for i in [
+        1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]}
     # Open records summary, and for each line, download the record.
     previous_patient = None
     with open(records_summary) as f:
@@ -198,8 +256,7 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
             # patients is a dictionary of patients we are interested in
             if record[:5] in patients.keys():
                 patient = record[:5]
-                if not os.path.exists(eeg_database_folder + patient):
-                    os.makedirs(eeg_database_folder + patient)
+                os.makedirs(eeg_database_folder + patient, exist_ok=True)
                 # Preprocess the data and save it in numpy format
                 if patient != previous_patient and previous_patient is not None:
                     # Preprocess the previous patient
