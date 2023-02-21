@@ -20,12 +20,16 @@ class SeizureClassifierWorkflow:
             self.workflow_element_names[0],
             sanitize=True)
 
+        model = estimator_module.SeizureClassifier()
+        model.fit(X_train, y_train)
+        
+        return model
+    
+    def test_submission(self, module_path, model, X_test):
+        y_pred = model.predict(X_test)
+        return y_pred
 
-        # TODO
-        pass
-
-
-workflow = rf.workflows.Estimator() # TODO
+workflow = SeizureClassifierWorkflow()
 
 score_types = [
     rf.score_types.roc_auc(name='auc'),
