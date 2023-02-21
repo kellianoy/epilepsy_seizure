@@ -262,7 +262,16 @@ def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
     y_test: list of np.array
         Test labels list
     dataset_folder: str
+        Path to the folder where to save the data
     """
+    # Select 3 patients at random to remove from the training set
+    patients_to_remove_train = np.random.choice(
+        len(X_train), PATIENTS_SIZE // 4, replace=False)
+    # Splice patients_to_remove_train indexes from the training set X and y
+    X_train = [X_train[i]
+               for i in range(len(X_train)) if i not in patients_to_remove_train]
+    y_train = [y_train[i]
+               for i in range(len(y_train)) if i not in patients_to_remove_train]
     # Find minimum length of the data for training set
     train_min_len = min([data.shape[0] for data in X_train])
     # Trim training set data to minimum length
@@ -352,11 +361,15 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         X_test.append(X_test_patient)
         y_train.append(y_train_patient)
         y_test.append(y_test_patient)
-    if remove and os.path.exists(eeg_database_folder + patient):
-        shutil.rmtree(eeg_database_folder + patient)
+        if remove and os.path.exists(eeg_database_folder + patient):
+            shutil.rmtree(eeg_database_folder + patient)
     # Normalize the data and save it
     print("Normalizing data and saving it...")
-    normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder)
+    normalize_data_and_save(X_train, y_train, X_test,
+                            y_test, dataset_folder)
+    print("Data saved to disk.")
+    if remove and os.path.exists(eeg_database_folder):
+        shutil.rmtree(eeg_database_folder)
 
 
 if __name__ == "__main__":
