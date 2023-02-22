@@ -3,20 +3,21 @@ import numpy as np
 import pandas as pd
 from rampwf.utils.importing import import_module_from_source
 from sklearn.model_selection import ShuffleSplit
+from sklearn.metrics import roc_auc_score
 import os
 
 problem_title = 'Predection of seizure'
 
-_prediction_label_name = [1, 2] # TODO
+_prediction_label_name = [0, 1] # TODO
 
-Prediction = rf.prediction_types.make_multiclass(label_names=_prediction_label_name*1)
+Predictions = rf.prediction_types.make_multiclass(label_names=_prediction_label_name*1)
 
 class SeizureClassifierWorkflow:
     def __init__(self, workflow_element_names=['seizure_classifier.py']):
         self.workflow_element_names = workflow_element_names
         self.estimator = None
 
-    def train_submission(self, module_path, X_train, y_train):
+    def train_submission(self, module_path, X_train, y_train, train_is=None):
         estimator_module = import_module_from_source(
             os.path.join(module_path, self.workflow_element_names[0]),
             self.workflow_element_names[0],
@@ -27,16 +28,14 @@ class SeizureClassifierWorkflow:
         
         return model
     
-    def test_submission(self, module_path, model, X_test):
+    def test_submission(self, model, X_test):
         y_pred = model.predict(X_test)
         return y_pred
-
+    
 workflow = SeizureClassifierWorkflow()
-
 score_types = [
-    rf.score_types.ROCAUC(name='auc'),
     rf.score_types.Accuracy(name='acc'),
-] # TODO
+]
 
 def get_cv(X, y):
     cv = ShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
@@ -57,6 +56,7 @@ def _read_data(path, dataset):
     y: np.ndarray
         Labels of the specified patients
     """
+    path = "./dataset"
     # Check that the path exists
     if not os.path.exists(path):
         raise ValueError('The path {} does not exist'.format(path))
