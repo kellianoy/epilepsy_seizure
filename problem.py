@@ -42,10 +42,6 @@ def get_cv(X, y):
     cv = ShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
     return cv.split(X, y)
 
-def _read_data(path, f_name):
-    fname = f"data_{f_name}"
-    data = pd.read_csv(os.path.join(path, 'data', fname), index_col=0)
-
 def _read_data(path, dataset):
     """Read data from the numpy arrays
     Parameters
@@ -64,8 +60,8 @@ def _read_data(path, dataset):
     # Check that the path exists
     if not os.path.exists(path):
         raise ValueError('The path {} does not exist'.format(path))
-    if not len(patients):
-        raise ValueError('No patient specified')
+    # if not len(patients):
+    #     raise ValueError('No patient specified')
     if dataset not in ['train', 'test']:
         raise ValueError('Unknown dataset: {}'.format(dataset))
     X_filename, y_filename = f"X_{dataset}.npy", f"y_{dataset}.npy"
