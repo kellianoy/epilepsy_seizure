@@ -14,6 +14,8 @@ from multiprocessing import cpu_count, Pool
 # Recordings, grouped into 23 cases, were collected from 22 subjects
 PATIENTS_LIST = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]
 PATIENTS_SIZE = len(PATIENTS_LIST)
+DATASET_WEBSITE = "https://physionet.org/files/chbmit/1.0.0/"
+SUMMARY_WEBSITE = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
 
 
 def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
@@ -309,16 +311,15 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
     seizure_summary = eeg_database_folder + "seizure_summary.csv"
     records_summary = eeg_database_folder + "RECORDS"
     dataset_folder = 'dataset/'
-    website = "https://archive.physionet.org/pn6/chbmit/"
-    summary = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
     # create required folders
     os.makedirs(eeg_database_folder, exist_ok=True)
     os.makedirs(dataset_folder, exist_ok=True)
     # download seizure summary and records files if they don't exist
     if not os.path.exists(records_summary):
-        urllib.request.urlretrieve(website + "RECORDS", records_summary)
+        urllib.request.urlretrieve(
+            DATASET_WEBSITE + "RECORDS", records_summary)
     if not os.path.exists(seizure_summary):
-        urllib.request.urlretrieve(summary, seizure_summary)
+        urllib.request.urlretrieve(SUMMARY_WEBSITE, seizure_summary)
     # For each patient we are interested in
     patients = {f"chb{i:02d}": i for i in PATIENTS_LIST}
     # Read the records summary file to get the list of files
@@ -337,8 +338,8 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         while not all([os.path.exists(eeg_database_folder + file) for file in patient_files]):
             if retries == 0:
                 raise Exception("Download failed for patient " + patient)
-            with Pool(cpu_count()) as p:
-                p.starmap(download_file, [(website + file, eeg_database_folder + file, 10, force_download)
+            with Pool(processes=len(patient_files)//2) as p:
+                p.starmap(download_file, [(DATASET_WEBSITE + file, eeg_database_folder + file, 10, force_download)
                                           for file in patient_files])
             retries -= 1
         # Preprocess the data
