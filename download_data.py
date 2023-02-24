@@ -144,14 +144,14 @@ def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
     csv_reader_bounds = csv.reader(open(seizure_summary_path), delimiter=',')
     liste_bounds = [[], [], []]
     for row in csv_reader_bounds:
-        if row != [] and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
+        if not row and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
             liste_bounds[0].append(row[0])
             liste_bounds[1].append(float(row[1]))
             liste_bounds[2].append(float(row[2]))
     csv_reader_list_filename = csv.reader(open(records_path), delimiter=',')
-    flag = 0
+    flag = False
     for filename in csv_reader_list_filename:
-        if int(filename[0][3]+filename[0][4]) == patient_id:
+        if int(filename[0][3] + filename[0][4]) == patient_id:
             bounds = []
             if filename[0][6:] in liste_bounds[0]:
                 indices = [i for i, x in enumerate(
@@ -161,10 +161,10 @@ def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
                                   liste_bounds[2][indice]])
             x, y = edf_to_array(
                 database_path+filename[0], bounds, time_length, patient_id)
-            if flag == 0:
+            if not flag:
                 x_master = np.copy(x)
                 y_master = np.copy(y)
-                flag = 1
+                flag = True
             else:
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
