@@ -34,10 +34,15 @@ class SeizureClassifierWorkflow:
     
 workflow = SeizureClassifierWorkflow()
 score_types = [
+    rf.score_types.ROCAUC(name='roc_auc'),
     rf.score_types.Accuracy(name='acc'),
 ]
 
 def get_cv(X, y):
+    print("Number of classes in the data: {}".format(len(np.unique(y))))
+    print("Value counts of the classes in the data: {}".format(
+        pd.Series(y).value_counts()))
+          
     cv = ShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
     return cv.split(X, y)
 
