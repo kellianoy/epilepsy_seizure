@@ -6,16 +6,22 @@ import urllib.request
 import urllib.error
 import warnings
 from multiprocessing import cpu_count, Pool
-
+import zipfile
+import gdown
 
 # This is a script to download the data from CHB-MIT scalp EEG database
 # The dataset can be found here: https://archive.physionet.org/pn6/chbmit/
 # Or here: https://physionet.org/content/chbmit/1.0.0/
 # Recordings, grouped into 23 cases, were collected from 22 subjects
+
+# List of the patients to use
 PATIENTS_LIST = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]
 PATIENTS_SIZE = len(PATIENTS_LIST)
+# Websites to download the data
 DATASET_WEBSITE = "https://physionet.org/files/chbmit/1.0.0/"
 SUMMARY_WEBSITE = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
+# Folder where to save the data
+FOLDER_NAME = "chb-mit-scalp-eeg-database-1.0.0/"
 
 
 def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
@@ -117,9 +123,9 @@ def remove_hours(X, y):
     return np.array(x_to_save), np.array(y_to_save)
 
 
-def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patient_id, output_folder,
-                        time_length):
-    """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
+def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
+                 time_length):
+    """ Convert the raw data to an array of data and labels
     Parameters
     ----------
     records_path: str
@@ -130,15 +136,12 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
         Path to the folder containing the data
     patient_id: int
         Number of the patient
-    output_folder: str
-        Path to the folder where to save the data
     time_length: float
         Length of the time window in seconds
     """
     # Ignore warnings
     warnings.filterwarnings("ignore")
-    csv_reader_bounds = csv.reader(
-        open(seizure_summary_path, 'r'), delimiter=',')
+    csv_reader_bounds = csv.reader(open(seizure_summary_path), delimiter=',')
     liste_bounds = [[], [], []]
     for row in csv_reader_bounds:
         if not row and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
@@ -155,9 +158,9 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
                     liste_bounds[0]) if x == filename[0][6:]]
                 for indice in indices:
                     bounds.append([liste_bounds[1][indice],
-                                   liste_bounds[2][indice]])
-            x, y = edf_to_array(database_path +
-                                filename[0], bounds, time_length, patient_id)
+                                  liste_bounds[2][indice]])
+            x, y = edf_to_array(
+                database_path+filename[0], bounds, time_length, patient_id)
             if not flag:
                 x_master = np.copy(x)
                 y_master = np.copy(y)
@@ -165,14 +168,38 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
             else:
                 x_master = np.concatenate((x_master, x))
                 y_master = np.concatenate((y_master, y))
+    return x_master, y_master
+
+
+def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patient_id,
+                        time_length):
+    """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
+    Parameters
+    ----------
+    records_path: str
+        Path to the file containing the `RECORDS` file
+    seizure_summary_path: str
+        Name of the file containing the list of the filename of the data
+    database_path: str
+        Path to the folder containing the data
+    patient_id: int
+        Number of the patient
+    time_length: float
+        Length of the time window in seconds
+    """
+    # Convert the raw data to an array of data and labels
+    x_master, y_master = raw_to_array(
+        records_path, seizure_summary_path, database_path, patient_id, time_length)
+    # Remove 4 hours before and after an epilepsy seizure
     x_master, y_master = remove_hours(x_master, y_master)
     # Split the data into train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
         x_master, y_master, split=0.8)
+    # Flush the data to avoid memory issues
+    x_master, y_master = None, None
     # Downsample the data
     X_train, y_train = downsample_shuffle_split(X_train, y_train)
     X_test, y_test = downsample_shuffle_split(X_test, y_test)
-
     return X_train, X_test, y_train, y_test
 
 
@@ -215,9 +242,9 @@ def downsample_shuffle_split(X, y):
     y_downsampled: np.array
         Downsampled labels
     """
-    np.random.seed(2102)
+    # Downsample the data
     random_indices = np.random.choice(
-        X.shape[0], X.shape[0] // PATIENTS_SIZE, replace=False)
+        X.shape[0], X.shape[0]*2 // PATIENTS_SIZE, replace=False)
     return X[random_indices], y[random_indices]
 
 
@@ -263,7 +290,7 @@ def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
     dataset_folder: str
         Path to the folder where to save the data
     """
-    # Select 3 patients at random to remove from the training set
+    # Select PATIENTS_SIZE // 4 patients at random to remove from the training set
     patients_to_remove_train = np.random.choice(
         len(X_train), PATIENTS_SIZE // 4, replace=False)
     # Splice patients_to_remove_train indexes from the training set X and y
@@ -293,14 +320,14 @@ def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
     np.save(dataset_folder + "y_test.npy", y_test)
 
 
-def download_dataset(eeg_database_folder, remove=False, force_process=False, force_download=False):
+def download_dataset(eeg_database_folder, remove_download=False, force_process=False, force_download=False):
     """ Download the dataset from the website, limiting the number of records
     (some records are not working)
     Parameters
     ----------
     eeg_database_folder: str
         eeg_database_folder where to save the dataset
-    remove: bool
+    remove_download: bool
         if True, remove the eeg_database_folder before downloading the dataset to save space
     force_process: bool
         if True, force the processing of the dataset
@@ -338,7 +365,7 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         while not all([os.path.exists(eeg_database_folder + file) for file in patient_files]):
             if retries == 0:
                 raise Exception("Download failed for patient " + patient)
-            with Pool(processes=len(patient_files)//2) as p:
+            with Pool(processes=int(1.4 * cpu_count())) as p:
                 p.starmap(download_file, [(DATASET_WEBSITE + file, eeg_database_folder + file, 10, force_download)
                                           for file in patient_files])
             retries -= 1
@@ -348,23 +375,39 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
                                                                                                seizure_summary,
                                                                                                eeg_database_folder,
                                                                                                patients[patient],
-                                                                                               dataset_folder,
                                                                                                1)
         X_train.append(X_train_patient)
         X_test.append(X_test_patient)
         y_train.append(y_train_patient)
         y_test.append(y_test_patient)
-        if remove and os.path.exists(eeg_database_folder + patient):
+        if remove_download and os.path.exists(eeg_database_folder + patient):
             shutil.rmtree(eeg_database_folder + patient)
     # Normalize the data and save it
     print("Normalizing data and saving it...")
     normalize_data_and_save(X_train, y_train, X_test,
                             y_test, dataset_folder)
     print("Data saved to disk.")
-    if remove and os.path.exists(eeg_database_folder):
+    if remove_download and os.path.exists(eeg_database_folder):
         shutil.rmtree(eeg_database_folder)
 
 
+def download_gdrive():
+    """ Download the data set from google drive and do checksum
+    """
+    # Download dataset from google drive and do checksum
+    url = 'https://drive.google.com/file/d/1AYY-IW3_UogxP1FfrnNemxok1FKPsV9d/view?usp=share_link'
+    md5 = "428debd6ef2bdb792304233b70074ec2"
+    destination = 'dataset/dataset.zip'
+    gdown.cached_download(url, destination, md5=md5,
+                          postprocess=gdown.extractall, fuzzy=True)
+    os.remove(destination)
+
+
 if __name__ == "__main__":
-    folder = "chb-mit-scalp-eeg-database-1.0.0/"
-    download_dataset(folder)
+    # Fix random seed
+    google_drive = True
+    np.random.seed(2402)
+    if not google_drive:
+        download_dataset(FOLDER_NAME)
+    else:
+        download_gdrive()

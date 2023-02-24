@@ -1,2 +1,3 @@
 mne == 1.0.0
 numpy
+gdown
