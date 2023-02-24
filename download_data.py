@@ -6,7 +6,8 @@ import urllib.request
 import urllib.error
 import warnings
 from multiprocessing import cpu_count, Pool
-
+import zipfile
+import gdown
 
 # This is a script to download the data from CHB-MIT scalp EEG database
 # The dataset can be found here: https://archive.physionet.org/pn6/chbmit/
@@ -243,7 +244,7 @@ def downsample_shuffle_split(X, y):
     """
     # Downsample the data
     random_indices = np.random.choice(
-        X.shape[0], X.shape[0] // PATIENTS_SIZE, replace=False)
+        X.shape[0], X.shape[0]*2 // PATIENTS_SIZE, replace=False)
     return X[random_indices], y[random_indices]
 
 
@@ -319,14 +320,14 @@ def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
     np.save(dataset_folder + "y_test.npy", y_test)
 
 
-def download_dataset(eeg_database_folder, remove=False, force_process=False, force_download=False):
+def download_dataset(eeg_database_folder, remove_download=False, force_process=False, force_download=False):
     """ Download the dataset from the website, limiting the number of records
     (some records are not working)
     Parameters
     ----------
     eeg_database_folder: str
         eeg_database_folder where to save the dataset
-    remove: bool
+    remove_download: bool
         if True, remove the eeg_database_folder before downloading the dataset to save space
     force_process: bool
         if True, force the processing of the dataset
@@ -379,18 +380,34 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         X_test.append(X_test_patient)
         y_train.append(y_train_patient)
         y_test.append(y_test_patient)
-        if remove and os.path.exists(eeg_database_folder + patient):
+        if remove_download and os.path.exists(eeg_database_folder + patient):
             shutil.rmtree(eeg_database_folder + patient)
     # Normalize the data and save it
     print("Normalizing data and saving it...")
     normalize_data_and_save(X_train, y_train, X_test,
                             y_test, dataset_folder)
     print("Data saved to disk.")
-    if remove and os.path.exists(eeg_database_folder):
+    if remove_download and os.path.exists(eeg_database_folder):
         shutil.rmtree(eeg_database_folder)
+
+
+def download_gdrive():
+    """ Download the data set from google drive and do checksum
+    """
+    # Download dataset from google drive and do checksum
+    url = 'https://drive.google.com/file/d/1AYY-IW3_UogxP1FfrnNemxok1FKPsV9d/view?usp=share_link'
+    md5 = "428debd6ef2bdb792304233b70074ec2"
+    destination = 'dataset/dataset.zip'
+    gdown.cached_download(url, destination, md5=md5,
+                          postprocess=gdown.extractall, fuzzy=True)
+    os.remove(destination)
 
 
 if __name__ == "__main__":
     # Fix random seed
+    google_drive = True
     np.random.seed(2402)
-    download_dataset(FOLDER_NAME)
+    if not google_drive:
+        download_dataset(FOLDER_NAME)
+    else:
+        download_gdrive(FILE_ID, DESTINATION)
