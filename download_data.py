@@ -12,10 +12,15 @@ from multiprocessing import cpu_count, Pool
 # The dataset can be found here: https://archive.physionet.org/pn6/chbmit/
 # Or here: https://physionet.org/content/chbmit/1.0.0/
 # Recordings, grouped into 23 cases, were collected from 22 subjects
+
+# List of the patients to use
 PATIENTS_LIST = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 14, 20, 21, 22, 23, 24]
 PATIENTS_SIZE = len(PATIENTS_LIST)
+# Websites to download the data
 DATASET_WEBSITE = "https://physionet.org/files/chbmit/1.0.0/"
 SUMMARY_WEBSITE = "https://raw.githubusercontent.com/NeuroSyd/Integer-Net/master/copy-to-CHBMIT/seizure_summary.csv"
+# Folder where to save the data
+FOLDER_NAME = "chb-mit-scalp-eeg-database-1.0.0/"
 
 
 def edf_to_array(filename_in, seizures_time_code, time_length, number_of_patient):
@@ -117,7 +122,55 @@ def remove_hours(X, y):
     return np.array(x_to_save), np.array(y_to_save)
 
 
-def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patient_id, output_folder,
+def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
+                 time_length):
+    """ Convert the raw data to an array of data and labels
+    Parameters
+    ----------
+    records_path: str
+        Path to the file containing the `RECORDS` file
+    seizure_summary_path: str
+        Name of the file containing the list of the filename of the data
+    database_path: str
+        Path to the folder containing the data
+    patient_id: int
+        Number of the patient
+    time_length: float
+        Length of the time window in seconds
+    """
+    # Ignore warnings
+    warnings.filterwarnings("ignore")
+    csv_reader_bounds = csv.reader(open(seizure_summary_path), delimiter=',')
+    liste_bounds = [[], [], []]
+    for row in csv_reader_bounds:
+        if row != [] and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
+            liste_bounds[0].append(row[0])
+            liste_bounds[1].append(float(row[1]))
+            liste_bounds[2].append(float(row[2]))
+    csv_reader_list_filename = csv.reader(open(records_path), delimiter=',')
+    flag = 0
+    for filename in csv_reader_list_filename:
+        if int(filename[0][3]+filename[0][4]) == patient_id:
+            bounds = []
+            if filename[0][6:] in liste_bounds[0]:
+                indices = [i for i, x in enumerate(
+                    liste_bounds[0]) if x == filename[0][6:]]
+                for indice in indices:
+                    bounds.append([liste_bounds[1][indice],
+                                  liste_bounds[2][indice]])
+            x, y = edf_to_array(
+                database_path+filename[0], bounds, time_length, patient_id)
+            if flag == 0:
+                x_master = np.copy(x)
+                y_master = np.copy(y)
+                flag = 1
+            else:
+                x_master = np.concatenate((x_master, x))
+                y_master = np.concatenate((y_master, y))
+    return x_master, y_master
+
+
+def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patient_id,
                         time_length):
     """ Preprocess the data from the CHB-MIT dataset and save it in numpy format
     Parameters
@@ -130,49 +183,22 @@ def preprocess_to_numpy(records_path, seizure_summary_path, database_path, patie
         Path to the folder containing the data
     patient_id: int
         Number of the patient
-    output_folder: str
-        Path to the folder where to save the data
     time_length: float
         Length of the time window in seconds
     """
-    # Ignore warnings
-    warnings.filterwarnings("ignore")
-    csv_reader_bounds = csv.reader(
-        open(seizure_summary_path, 'r'), delimiter=',')
-    liste_bounds = [[], [], []]
-    for row in csv_reader_bounds:
-        if not row and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
-            liste_bounds[0].append(row[0])
-            liste_bounds[1].append(float(row[1]))
-            liste_bounds[2].append(float(row[2]))
-    csv_reader_list_filename = csv.reader(open(records_path), delimiter=',')
-    flag = False
-    for filename in csv_reader_list_filename:
-        if int(filename[0][3] + filename[0][4]) == patient_id:
-            bounds = []
-            if filename[0][6:] in liste_bounds[0]:
-                indices = [i for i, x in enumerate(
-                    liste_bounds[0]) if x == filename[0][6:]]
-                for indice in indices:
-                    bounds.append([liste_bounds[1][indice],
-                                   liste_bounds[2][indice]])
-            x, y = edf_to_array(database_path +
-                                filename[0], bounds, time_length, patient_id)
-            if not flag:
-                x_master = np.copy(x)
-                y_master = np.copy(y)
-                flag = True
-            else:
-                x_master = np.concatenate((x_master, x))
-                y_master = np.concatenate((y_master, y))
+    # Convert the raw data to an array of data and labels
+    x_master, y_master = raw_to_array(
+        records_path, seizure_summary_path, database_path, patient_id, time_length)
+    # Remove 4 hours before and after an epilepsy seizure
     x_master, y_master = remove_hours(x_master, y_master)
     # Split the data into train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
         x_master, y_master, split=0.8)
+    # Flush the data to avoid memory issues
+    x_master, y_master = None, None
     # Downsample the data
     X_train, y_train = downsample_shuffle_split(X_train, y_train)
     X_test, y_test = downsample_shuffle_split(X_test, y_test)
-
     return X_train, X_test, y_train, y_test
 
 
@@ -215,7 +241,7 @@ def downsample_shuffle_split(X, y):
     y_downsampled: np.array
         Downsampled labels
     """
-    np.random.seed(2102)
+    # Downsample the data
     random_indices = np.random.choice(
         X.shape[0], X.shape[0] // PATIENTS_SIZE, replace=False)
     return X[random_indices], y[random_indices]
@@ -263,7 +289,7 @@ def normalize_data_and_save(X_train, y_train, X_test, y_test, dataset_folder):
     dataset_folder: str
         Path to the folder where to save the data
     """
-    # Select 3 patients at random to remove from the training set
+    # Select PATIENTS_SIZE // 4 patients at random to remove from the training set
     patients_to_remove_train = np.random.choice(
         len(X_train), PATIENTS_SIZE // 4, replace=False)
     # Splice patients_to_remove_train indexes from the training set X and y
@@ -338,7 +364,7 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
         while not all([os.path.exists(eeg_database_folder + file) for file in patient_files]):
             if retries == 0:
                 raise Exception("Download failed for patient " + patient)
-            with Pool(processes=len(patient_files)//2) as p:
+            with Pool(processes=int(1.4 * cpu_count())) as p:
                 p.starmap(download_file, [(DATASET_WEBSITE + file, eeg_database_folder + file, 10, force_download)
                                           for file in patient_files])
             retries -= 1
@@ -348,7 +374,6 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
                                                                                                seizure_summary,
                                                                                                eeg_database_folder,
                                                                                                patients[patient],
-                                                                                               dataset_folder,
                                                                                                1)
         X_train.append(X_train_patient)
         X_test.append(X_test_patient)
@@ -366,5 +391,6 @@ def download_dataset(eeg_database_folder, remove=False, force_process=False, for
 
 
 if __name__ == "__main__":
-    folder = "chb-mit-scalp-eeg-database-1.0.0/"
-    download_dataset(folder)
+    # Fix random seed
+    np.random.seed(2402)
+    download_dataset(FOLDER_NAME)
