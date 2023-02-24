@@ -150,7 +150,7 @@ def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
             liste_bounds[2].append(float(row[2]))
     csv_reader_list_filename = csv.reader(open(records_path), delimiter=',')
     flag = False
-    for filename in csv_reader_list_filename:Z
+    for filename in csv_reader_list_filename:
         if int(filename[0][3] + filename[0][4]) == patient_id:
             bounds = []
             if filename[0][6:] in liste_bounds[0]:
