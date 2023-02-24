@@ -150,7 +150,7 @@ def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
             liste_bounds[2].append(float(row[2]))
     csv_reader_list_filename = csv.reader(open(records_path), delimiter=',')
     flag = False
-    for filename in csv_reader_list_filename:
+    for filename in csv_reader_list_filename:Z
         if int(filename[0][3] + filename[0][4]) == patient_id:
             bounds = []
             if filename[0][6:] in liste_bounds[0]:
@@ -410,4 +410,4 @@ if __name__ == "__main__":
     if not google_drive:
         download_dataset(FOLDER_NAME)
     else:
-        download_gdrive(FILE_ID, DESTINATION)
+        download_gdrive()
