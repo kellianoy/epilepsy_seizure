@@ -144,7 +144,7 @@ def raw_to_array(records_path, seizure_summary_path, database_path, patient_id,
     csv_reader_bounds = csv.reader(open(seizure_summary_path), delimiter=',')
     liste_bounds = [[], [], []]
     for row in csv_reader_bounds:
-        if not row and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
+        if row != [] and row != ['File_name', 'Seizure_start', 'Seizure_stop']:
             liste_bounds[0].append(row[0])
             liste_bounds[1].append(float(row[1]))
             liste_bounds[2].append(float(row[2]))
@@ -403,6 +403,18 @@ def download_gdrive():
     os.remove(destination)
 
 
+def download_visualisation():
+    """ Download the visualisation from google drive and do checksum
+    """
+    # Download dataset from google drive and do checksum
+    url = 'https://drive.google.com/file/d/1MPSCM2XdLj_oX4ucxfF6wuACtXWjIiiA/view?usp=share_link'
+    md5 = "ac61a06b67ad86f852761941144d25eb"
+    destination = 'visualisation.zip'
+    gdown.cached_download(url, destination, md5=md5,
+                          postprocess=gdown.extractall, fuzzy=True)
+    os.remove(destination)
+
+
 if __name__ == "__main__":
     # Fix random seed
     google_drive = True
@@ -411,3 +423,4 @@ if __name__ == "__main__":
         download_dataset(FOLDER_NAME)
     else:
         download_gdrive()
+    download_visualisation()
