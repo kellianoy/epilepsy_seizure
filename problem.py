@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from rampwf.utils.importing import import_module_from_source
 from sklearn.model_selection import ShuffleSplit
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 import os
 
@@ -12,8 +13,8 @@ _prediction_label_name = [0, 1] # TODO
 
 Predictions = rf.prediction_types.make_multiclass(label_names=_prediction_label_name*1)
 
-class SeizureClassifierWorkflow:
-    def __init__(self, workflow_element_names=['seizure_classifier.py']):
+class EegClassifierWorkflow:
+    def __init__(self, workflow_element_names=['eegclassifier.py']):
         self.workflow_element_names = workflow_element_names
         self.estimator = None
 
@@ -23,7 +24,7 @@ class SeizureClassifierWorkflow:
             self.workflow_element_names[0],
             sanitize=True)
 
-        model = estimator_module.SeizureClassifier()
+        model = estimator_module.EegClassifier()
         model.fit(X_train, y_train)
         
         return model
@@ -32,7 +33,7 @@ class SeizureClassifierWorkflow:
         y_pred = model.predict(X_test)
         return y_pred
     
-workflow = SeizureClassifierWorkflow()
+workflow = EegClassifierWorkflow()
 score_types = [
     rf.score_types.ROCAUC(name='roc_auc'),
     rf.score_types.Accuracy(name='acc'),
@@ -78,7 +79,9 @@ def _read_data(path, dataset):
     if not os.path.exists(y_path):
         raise ValueError('The path {} does not exist'.format(y_path))
     # Load the data
-    return np.load(X_path), np.load(y_path)
+    X, y = np.load(X_path), np.load(y_path)
+
+    return X, y
 
 
 def get_train_data(path='./dataset'):
