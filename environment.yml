@@ -6,6 +6,7 @@ dependencies:
   - pandas
   - numpy
   - pip
+  - ipython
   - pip:
       - gdown
       - ramp-workflow
