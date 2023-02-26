@@ -5,9 +5,8 @@ class EegClassifier(object):
         pass
 
     def fit(self, data, y):
-        classes = [1,2]
+        classes = [0, 1]
         self.n_classes = len(classes)
-        pass
 
     def predict(self, data):
         proba = np.random.rand(len(data), self.n_classes)
