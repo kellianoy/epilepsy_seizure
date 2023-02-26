@@ -5,7 +5,7 @@ class EegClassifier(object):
         pass
 
     def fit(self, data, y):
-        classes = [0,1]
+        classes = [0, 1]
         self.n_classes = len(classes)
 
     def predict(self, data):
