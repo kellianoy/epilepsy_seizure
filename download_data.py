@@ -413,6 +413,9 @@ def download_visualisation():
     gdown.cached_download(url, destination, md5=md5,
                           postprocess=gdown.extractall, fuzzy=True)
     os.remove(destination)
+    if not os.path.exists("visualisation/seizure_summary.csv"):
+        urllib.request.urlretrieve(
+            SUMMARY_WEBSITE, "visualisation/seizure_summary.csv")
 
 
 if __name__ == "__main__":

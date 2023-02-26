@@ -1,0 +1,12 @@
+name: epilepsy-seizure
+
+dependencies:
+  - python=3.9.15
+  - matplotlib
+  - pandas
+  - numpy
+  - pip
+  - pip:
+      - gdown
+      - ramp-workflow
+      - mne == 1.0.0
